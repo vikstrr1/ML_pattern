@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.linalg
+import sklearn.datasets
 
 def load_iris_data(path):
     data_list = []      # Create an empty list
@@ -91,6 +92,8 @@ def compute_lda(Sw, Sb, m=2):
 
 
 
+
+
 data =load_iris_data('/Users/rasmusvikstrom/Desktop/ml_pattern/lab_3/iris.csv')
 C, centered_data = compute_covariance_matrix(data)
 P = compute_pca(C, m=3)
@@ -101,8 +104,60 @@ DP[0, :] *= -1  # Flip first PCA axis
 DP[1, :] *= -1  # Flip second PCA axis
 
 # Plot the result
-plot_pca_projection(DP, labels=data[4, :])
+#plot_pca_projection(DP, labels=data[4, :])
 Sw, Sb = compute_lda_matrices(data)
-W =compute_lda(Sw, Sb, m=3)
+W =compute_lda(Sw, Sb, m=2)
+
+matrix = np.load('/Users/rasmusvikstrom/Desktop/ml_pattern/lab_3/solution/IRIS_LDA_matrix_m2.npy')
+
+# Print the shape and contents of the matrix to understand its structure
+print(matrix.shape)
+print(matrix)
 
 print(W)
+U, _, Vt = np.linalg.svd(W)
+
+# Perform SVD on the matrix from the file
+U_matrix, _, Vt_matrix = np.linalg.svd(matrix)
+
+# Check the similarity of the subspaces
+singular_values = np.linalg.svd(np.hstack([U, U_matrix]))[1]
+
+print(singular_values)
+
+def load_iris():
+    return sklearn.datasets.load_iris()['data'].T, sklearn.datasets.load_iris()['target']
+
+DIris, LIris = load_iris()
+D = DIris[:, LIris != 0]
+L = LIris[LIris != 0]
+
+def split_db_2to1(D, L, seed=0):
+    nTrain = int(D.shape[1]*2.0/3.0)
+    np.random.seed(seed)
+    idx = np.random.permutation(D.shape[1])
+    idxTrain = idx[0:nTrain]
+    idxTest = idx[nTrain:]
+    DTR = D[:, idxTrain]
+    DVAL = D[:, idxTest]
+    LTR = L[idxTrain]
+    LVAL = L[idxTest]
+    return (DTR, LTR), (DVAL, LVAL)
+
+(DTR, LTR), (DVAL, LVAL) = split_db_2to1(D, L)
+
+# Apply LDA transformation to training and validation data
+DTR_lda = np.dot(W.T, DTR)
+DVAL_lda = np.dot(W.T, DVAL)
+
+threshold = (DTR_lda[0, LTR==1].mean() + DTR_lda[0, LTR==2].mean()) / 2.0
+PVAL = np.zeros(shape=LVAL.shape, dtype=np.int32)
+PVAL[DVAL_lda[0] >= threshold] = 2
+PVAL[DVAL_lda[0] < threshold] = 1
+
+# No error rate calculation; just printing LDA transformation results
+
+print('Labels:     ', LVAL)
+print('Predictions:', PVAL)
+print('Number of erros:', (PVAL != LVAL).sum(), '(out of %d samples)' % (LVAL.size))
+print('Error rate: %.1f%%' % ( (PVAL != LVAL).sum() / float(LVAL.size) *100 ))
